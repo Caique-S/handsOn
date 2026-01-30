@@ -1,23 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ObjectId } from 'mongodb'
-import clientPromise from '@/app/lib/mongodb'
-import { Carregamento } from '@/app/lib/models/Carregamento'
 
-// ✅ CORREÇÃO: params é uma Promise no Next.js 14+
-interface RouteParams {
-  params: Promise<{ id: string }>
+// Interface para os parâmetros
+interface Params {
+  id: string
 }
 
-// GET - Buscar carregamento por ID
-export async function GET(request: NextRequest, { params }: RouteParams) {
+// 🔥 SOLUÇÃO: Definir tipos inline para evitar conflitos do TypeScript
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<Params> }
+): Promise<NextResponse> {
   try {
-    const { id } = await params // ✅ AGUARDAR a Promise
-    const client = await clientPromise
+    const params = await context.params
+    const { id } = params
+    
+    // Conexão com MongoDB (ajuste o caminho conforme sua estrutura)
+    const { MongoClient } = await import('mongodb')
+    const client = new MongoClient(process.env.MONGODB_URI!)
+    await client.connect()
     const db = client.db(process.env.MONGODB_DB || 'carregamentos_db')
     
     const carregamento = await db
-      .collection<Carregamento>('carregamentos')
+      .collection('carregamentos')
       .findOne({ _id: new ObjectId(id) })
+    
+    await client.close()
     
     if (!carregamento) {
       return NextResponse.json(
@@ -27,26 +35,32 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
     
     return NextResponse.json(carregamento)
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erro ao buscar carregamento:', error)
     return NextResponse.json(
-      { error: 'Erro ao buscar carregamento' },
+      { error: error.message || 'Erro ao buscar carregamento' },
       { status: 500 }
     )
   }
 }
 
-// PUT - Atualizar carregamento
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(
+  request: NextRequest,
+  context: { params: Promise<Params> }
+): Promise<NextResponse> {
   try {
-    const { id } = await params // ✅ AGUARDAR a Promise
-    const client = await clientPromise
+    const params = await context.params
+    const { id } = params
+    
+    const { MongoClient } = await import('mongodb')
+    const client = new MongoClient(process.env.MONGODB_URI!)
+    await client.connect()
     const db = client.db(process.env.MONGODB_DB || 'carregamentos_db')
     
     const updates = await request.json()
     
     const result = await db
-      .collection<Carregamento>('carregamentos')
+      .collection('carregamentos')
       .updateOne(
         { _id: new ObjectId(id) },
         { 
@@ -56,6 +70,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           }
         }
       )
+    
+    await client.close()
     
     if (result.matchedCount === 0) {
       return NextResponse.json(
@@ -68,25 +84,33 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       message: 'Carregamento atualizado com sucesso',
       modifiedCount: result.modifiedCount
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erro ao atualizar carregamento:', error)
     return NextResponse.json(
-      { error: 'Erro ao atualizar carregamento' },
+      { error: error.message || 'Erro ao atualizar carregamento' },
       { status: 500 }
     )
   }
 }
 
-// DELETE - Remover carregamento
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<Params> }
+): Promise<NextResponse> {
   try {
-    const { id } = await params // ✅ AGUARDAR a Promise
-    const client = await clientPromise
+    const params = await context.params
+    const { id } = params
+    
+    const { MongoClient } = await import('mongodb')
+    const client = new MongoClient(process.env.MONGODB_URI!)
+    await client.connect()
     const db = client.db(process.env.MONGODB_DB || 'carregamentos_db')
     
     const result = await db
-      .collection<Carregamento>('carregamentos')
+      .collection('carregamentos')
       .deleteOne({ _id: new ObjectId(id) })
+    
+    await client.close()
     
     if (result.deletedCount === 0) {
       return NextResponse.json(
@@ -99,10 +123,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       message: 'Carregamento removido com sucesso',
       deletedCount: result.deletedCount
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erro ao remover carregamento:', error)
     return NextResponse.json(
-      { error: 'Erro ao remover carregamento' },
+      { error: error.message || 'Erro ao remover carregamento' },
       { status: 500 }
     )
   }
