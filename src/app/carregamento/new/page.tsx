@@ -1,7 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import {Truck,Clock,Package,User,MapPin,Lock,Save,ChevronLeft,ChevronRight,CheckCircle,TrendingUp,} from "lucide-react";
+import {
+  Truck,
+  Clock,
+  Package,
+  User,
+  MapPin,
+  Lock,
+  Save,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle,
+  TrendingUp,
+  Loader2,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 
 // Usando a interface do frontend
@@ -260,6 +273,50 @@ export default function NovoCarregamento() {
     };
   };
 
+  // ✅ ADICIONAR: Função para salvar carregamento
+  const handleSaveCarregamento = async (finalizar = false) => {
+    setIsLoading(true);
+    
+    try {
+      const dadosPreparados = prepararDados();
+      
+      // Adicionar status baseado se está finalizando
+      const dadosComStatus = {
+        ...dadosPreparados,
+        status: finalizar ? "liberada" : "em_uso"
+      };
+      
+      const response = await fetch('/api/carregamentos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dadosComStatus),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        alert(
+          finalizar 
+            ? 'Carregamento finalizado com sucesso! Veículo marcado como em rota.'
+            : 'Carregamento salvo com sucesso!'
+        );
+        
+        // Redirecionar para dashboard se finalizado
+        if (finalizar) {
+          router.push('/carregamento/dashboard');
+        }
+      } else {
+        alert(`Erro: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Erro ao salvar carregamento:', error);
+      alert('Erro ao salvar carregamento. Tente novamente.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Calcular progresso atual
   const progresso = calcularProgresso(carregamento.horarios);
@@ -652,11 +709,14 @@ export default function NovoCarregamento() {
           {/* ✅ CORREÇÃO: Dois botões - Salvar e Finalizar */}
           <div className="flex justify-end gap-4">
             <button
+              onClick={() => handleSaveCarregamento(false)}
               className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isLoading}
             >
               {isLoading ? (
                 <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Salvando...
                 </>
               ) : (
                 <>
@@ -666,6 +726,7 @@ export default function NovoCarregamento() {
               )}
             </button>
             <button
+              onClick={() => handleSaveCarregamento(true)}
               className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed ${
                 verificarCamposObrigatorios()
                   ? "bg-green-600 text-white hover:bg-green-700"
@@ -680,7 +741,8 @@ export default function NovoCarregamento() {
             >
               {isLoading ? (
                 <>
-                  
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Finalizando...
                 </>
               ) : (
                 <>
