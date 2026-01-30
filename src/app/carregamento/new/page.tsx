@@ -669,7 +669,7 @@ export default function NovoCarregamento() {
                   placeholder="0"
                   value={carregamento.cargas.gaiolas}
                   onChange={(e) =>
-                    updateCargas("gaiolas", parseInt(e.target.value) || 0)
+                    updateCargas("gaiolas", parseInt(e.target.value))
                   }
                 />
               </div>
@@ -684,7 +684,7 @@ export default function NovoCarregamento() {
                   placeholder="0"
                   value={carregamento.cargas.volumosos}
                   onChange={(e) =>
-                    updateCargas("volumosos", parseInt(e.target.value) || 0)
+                    updateCargas("volumosos", parseInt(e.target.value))
                   }
                 />
               </div>
@@ -699,7 +699,7 @@ export default function NovoCarregamento() {
                   placeholder="0"
                   value={carregamento.cargas.mangaPallets}
                   onChange={(e) =>
-                    updateCargas("mangaPallets", parseInt(e.target.value) || 0)
+                    updateCargas("mangaPallets", parseInt(e.target.value))
                   }
                 />
               </div>
