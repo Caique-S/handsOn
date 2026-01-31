@@ -1,6 +1,5 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from "react";
 import {
@@ -19,6 +18,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from 'react';
 
 interface CarregamentoInput {
   doca: number;
@@ -107,13 +107,14 @@ const calcularProgresso = (horarios: CarregamentoInput["horarios"]) => {
   };
 };
 
-export default function EditarCarregamento() {
+ function EditarCarregamentoContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const docaId = searchParams.get("id");
   const docaNumero = searchParams.get("doca");
 
-  const [isLoading, setIsLoading] = useState(true);
+
+const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -940,5 +941,23 @@ export default function EditarCarregamento() {
         </div>
       </div>
     </div>
+  );
+
+ }
+
+ export default function EditarCarregamento() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-4xl mx-auto mt-20 p-4">
+        <div className="flex justify-center items-center h-64">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <p className="text-gray-600">Carregando dados...</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <EditarCarregamentoContent />
+    </Suspense>
   );
 }
