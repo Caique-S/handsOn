@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
+    "@vercel/functions": "^3.4.0",
     "lucide-react": "^0.563.0",
     "mongoose": "^9.1.5",
     "next": "^16.1.6",
