@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Car,
   Loader,
+  Edit,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -33,6 +34,20 @@ interface DocaStatus {
     volumosos: number;
     mangaPallets: number;
   };
+  _id?: string;
+  sequenciaCarro?: number;
+  horarios?: {
+    encostouDoca: string;
+    inicioCarregamento: string;
+    fimCarregamento: string;
+    liberacao: string;
+  };
+  lacres?: {
+    traseiro: string;
+    lateralEsquerdo?: string;
+    lateralDireito?: string;
+  };
+  createdAt?: string;
 }
 
 interface DashboardStats {
@@ -118,7 +133,6 @@ export default function DashboardAnalise() {
   });
 
   const handleExportData = () => {
-    // Simular exportação de dados
     const dataStr = JSON.stringify(
       {
         periodo: selectedPeriod,
@@ -149,6 +163,47 @@ export default function DashboardAnalise() {
 
   const handleNovoCarregamento = () => {
     router.push("/carregamento/new");
+  };
+
+  // NOVA FUNÇÃO: Editar carregamento da doca
+  const handleEditarCarregamento = (doca: DocaStatus) => {
+    if (doca.status === "ocupada" && doca._id) {
+      // Redirecionar para a página de carregamento com os dados existentes
+      const carregamentoData = {
+        doca: doca.id,
+        cidadeDestino: doca.cidadeDestino || "",
+        motorista: {
+          nome: doca.motorista || "",
+          cpf: "",
+        },
+        tipoVeiculo: doca.tipoVeiculo || "3/4",
+        placas: {
+          placaSimples: doca.placaVeiculo || "",
+        },
+        horarios: doca.horarios || {
+          encostouDoca: doca.horarioEntrada || "",
+          inicioCarregamento: "",
+          fimCarregamento: "",
+          liberacao: "",
+        },
+        lacres: doca.lacres || {
+          traseiro: "",
+          lateralEsquerdo: "",
+          lateralDireito: "",
+        },
+        cargas: doca.carga || {
+          gaiolas: 0,
+          volumosos: 0,
+          mangaPallets: 0,
+        },
+        _id: doca._id,
+        isEditing: true,
+      };
+      
+      // Salvar os dados no localStorage para a página de carregamento acessar
+      localStorage.setItem('carregamentoEditavel', JSON.stringify(carregamentoData));
+      router.push(`/carregamento/edit?id=${doca._id}&doca=${doca.id}`);
+    }
   };
 
   const handleScroll = (direction: "left" | "right") => {
@@ -188,6 +243,17 @@ export default function DashboardAnalise() {
     return viewMode === "em_uso"
       ? "bg-orange-100 text-orange-800"
       : "bg-green-100 text-green-800";
+  };
+
+  // Estilo para card clicável
+  const getCardStyle = (doca: DocaStatus) => {
+    const baseStyle = `p-4 border rounded-lg transition-all duration-300 ${getBorderColor()} ${getBgColor()}`;
+    
+    if (viewMode === "em_uso" && doca.status === "ocupada") {
+      return `${baseStyle} cursor-pointer hover:shadow-md hover:scale-[1.02] active:scale-[0.99]`;
+    }
+    
+    return baseStyle;
   };
 
   return (
@@ -260,7 +326,6 @@ export default function DashboardAnalise() {
                     onClick={() => {
                       setSelectedPeriod(periodo.value);
                       if (periodo.value !== "personalizado") {
-                        // Atualizar data automaticamente
                         const today = new Date();
                         if (periodo.value === "ontem") {
                           const yesterday = new Date(today);
@@ -396,7 +461,13 @@ export default function DashboardAnalise() {
                       {colunaEsquerda.map((doca) => (
                         <div
                           key={doca.id}
-                          className={`p-4 border rounded-lg transition-all duration-300 ${getBorderColor()} ${getBgColor()}`}
+                          className={getCardStyle(doca)}
+                          onClick={() => {
+                            if (viewMode === "em_uso" && doca.status === "ocupada") {
+                              handleEditarCarregamento(doca);
+                            }
+                          }}
+                          title={viewMode === "em_uso" && doca.status === "ocupada" ? "Clique para editar/finalizar este carregamento" : ""}
                         >
                           <div className="flex justify-between items-start mb-3">
                             <div className="flex items-center gap-3">
@@ -410,8 +481,11 @@ export default function DashboardAnalise() {
                                 )}
                               </div>
                               <div>
-                                <div className="font-bold text-xl">
+                                <div className="font-bold text-xl flex items-center gap-2">
                                   Doca {doca.id}
+                                  {viewMode === "em_uso" && doca.status === "ocupada" && (
+                                    <Edit className="w-4 h-4 text-orange-500" />
+                                  )}
                                 </div>
                                 <div
                                   className={`text-sm font-medium ${getTextColor()}`}
@@ -475,6 +549,29 @@ export default function DashboardAnalise() {
                               </div>
                             </div>
 
+                            {/* Carga */}
+                            {doca.carga && (
+                              <div className="mt-3 pt-3 border-t border-gray-200">
+                                <div className="text-xs text-gray-500 mb-2">
+                                  Carga
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                  <div className="text-center">
+                                    <div className="font-bold">{doca.carga.gaiolas}</div>
+                                    <div className="text-xs text-gray-500">Gaiolas</div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="font-bold">{doca.carga.volumosos}</div>
+                                    <div className="text-xs text-gray-500">Volumosos</div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="font-bold">{doca.carga.mangaPallets}</div>
+                                    <div className="text-xs text-gray-500">Manga Pallets</div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
                             {/* Horário se disponível */}
                             {viewMode === "liberadas" && doca.horarioSaida && (
                               <div className="mt-3 pt-3 border-t border-gray-200">
@@ -484,6 +581,25 @@ export default function DashboardAnalise() {
                                 <div className="font-medium">
                                   {doca.horarioSaida}
                                 </div>
+                              </div>
+                            )}
+
+                            {/* Botão de ação para docas em uso */}
+                            {viewMode === "em_uso" && doca.status === "ocupada" && (
+                              <div className="mt-4 pt-4 border-t border-gray-200">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditarCarregamento(doca);
+                                  }}
+                                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                  Editar/Finalizar Carregamento
+                                </button>
+                                <p className="text-xs text-gray-500 mt-1 text-center">
+                                  Clique no card ou botão para editar
+                                </p>
                               </div>
                             )}
                           </div>
@@ -496,7 +612,13 @@ export default function DashboardAnalise() {
                       {colunaDireita.map((doca) => (
                         <div
                           key={doca.id}
-                          className={`p-4 border rounded-lg transition-all duration-300 ${getBorderColor()} ${getBgColor()}`}
+                          className={getCardStyle(doca)}
+                          onClick={() => {
+                            if (viewMode === "em_uso" && doca.status === "ocupada") {
+                              handleEditarCarregamento(doca);
+                            }
+                          }}
+                          title={viewMode === "em_uso" && doca.status === "ocupada" ? "Clique para editar/finalizar este carregamento" : ""}
                         >
                           <div className="flex justify-between items-start mb-3">
                             <div className="flex items-center gap-3">
@@ -510,8 +632,11 @@ export default function DashboardAnalise() {
                                 )}
                               </div>
                               <div>
-                                <div className="font-bold text-xl">
+                                <div className="font-bold text-xl flex items-center gap-2">
                                   Doca {doca.id}
+                                  {viewMode === "em_uso" && doca.status === "ocupada" && (
+                                    <Edit className="w-4 h-4 text-orange-500" />
+                                  )}
                                 </div>
                                 <div
                                   className={`text-sm font-medium ${getTextColor()}`}
@@ -575,6 +700,29 @@ export default function DashboardAnalise() {
                               </div>
                             </div>
 
+                            {/* Carga */}
+                            {doca.carga && (
+                              <div className="mt-3 pt-3 border-t border-gray-200">
+                                <div className="text-xs text-gray-500 mb-2">
+                                  Carga
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                  <div className="text-center">
+                                    <div className="font-bold">{doca.carga.gaiolas}</div>
+                                    <div className="text-xs text-gray-500">Gaiolas</div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="font-bold">{doca.carga.volumosos}</div>
+                                    <div className="text-xs text-gray-500">Volumosos</div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="font-bold">{doca.carga.mangaPallets}</div>
+                                    <div className="text-xs text-gray-500">Manga Pallets</div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
                             {/* Horário se disponível */}
                             {viewMode === "liberadas" && doca.horarioSaida && (
                               <div className="mt-3 pt-3 border-t border-gray-200">
@@ -584,6 +732,25 @@ export default function DashboardAnalise() {
                                 <div className="font-medium">
                                   {doca.horarioSaida}
                                 </div>
+                              </div>
+                            )}
+
+                            {/* Botão de ação para docas em uso */}
+                            {viewMode === "em_uso" && doca.status === "ocupada" && (
+                              <div className="mt-4 pt-4 border-t border-gray-200">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditarCarregamento(doca);
+                                  }}
+                                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                  Editar/Finalizar Carregamento
+                                </button>
+                                <p className="text-xs text-gray-500 mt-1 text-center">
+                                  Clique no card ou botão para editar
+                                </p>
                               </div>
                             )}
                           </div>
@@ -616,7 +783,7 @@ export default function DashboardAnalise() {
               <div className="flex flex-wrap justify-between items-center">
                 <div className={`text-sm font-medium ${getTextColor()}`}>
                   {viewMode === "em_uso"
-                    ? `Mostrando ${docasFiltradas.length} docas em uso`
+                    ? `Mostrando ${docasFiltradas.length} docas em uso (clique para editar)`
                     : `Mostrando ${docasFiltradas.length} rotas liberadas`}
                 </div>
                 <div className="text-sm text-gray-500">

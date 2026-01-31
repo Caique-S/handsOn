@@ -1,114 +1,159 @@
-// @ts-nocheck
+import { NextResponse } from 'next/server';
+import { MongoClient, ObjectId } from 'mongodb';
 
-import { NextRequest, NextResponse } from 'next/server'
-import { ObjectId } from 'mongodb'
-import clientPromise from '../../lib/mongodb'
-import { Carregamento } from '../../lib/models/Carregamento'
+// Configuração do MongoDB
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
+const MONGODB_DB = process.env.MONGODB_DB || 'seubanco';
+const COLLECTION = 'carregamentos';
 
-// Note que no Next.js 14, `params` é uma Promise
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+async function connectToDatabase() {
+  const client = new MongoClient(MONGODB_URI);
+  await client.connect();
+  const db = client.db(MONGODB_DB);
+  return { client, db };
+}
+
+// GET - Listar todos os carregamentos
+export async function GET() {
+  let client;
   try {
-    // Aguardar a Promise dos params
-    const { id } = await params
-    const client = await clientPromise
-    const db = client.db(process.env.MONGODB_DB || 'carregamentos_db')
+    const { client: mongoClient, db } = await connectToDatabase();
+    client = mongoClient;
     
-    const carregamento = await db
-      .collection<Carregamento>('carregamentos')
-      .findOne({ _id: new ObjectId(id) })
+    const collection = db.collection(COLLECTION);
+    const carregamentos = await collection.find({}).sort({ doca: 1 }).toArray();
     
-    if (!carregamento) {
-      return NextResponse.json(
-        { error: 'Carregamento não encontrado' },
-        { status: 404 }
-      )
-    }
-    
-    return NextResponse.json(carregamento)
+    return NextResponse.json(carregamentos, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+      },
+    });
   } catch (error) {
-    console.error('Erro ao buscar carregamento:', error)
+    console.error('Erro na API de carregamentos:', error);
     return NextResponse.json(
-      { error: 'Erro ao buscar carregamento' },
+      { error: 'Erro ao carregar dados de carregamentos' },
       { status: 500 }
-    )
+    );
+  } finally {
+    if (client) await client.close();
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+// POST - Criar novo carregamento
+export async function POST(request: Request) {
+  let client;
   try {
-    const { id } = await params
-    const client = await clientPromise
-    const db = client.db(process.env.MONGODB_DB || 'carregamentos_db')
+    const body = await request.json();
     
-    const updates = await request.json()
+    console.log('Recebendo dados:', body);
     
-    const result = await db
-      .collection<Carregamento>('carregamentos')
-      .updateOne(
-        { _id: new ObjectId(id) },
+    // Validar campos obrigatórios
+    if (!body.doca || !body.cidadeDestino || !body.motorista) {
+      return NextResponse.json(
         { 
-          $set: {
-            ...updates,
-            updatedAt: new Date()
-          }
+          success: false,
+          error: 'Campos obrigatórios faltando: doca, cidadeDestino, motorista'
+        },
+        { status: 400 }
+      );
+    }
+    
+    const { client: mongoClient, db } = await connectToDatabase();
+    client = mongoClient;
+    const collection = db.collection(COLLECTION);
+    
+    // Verificar se a doca já está em uso
+    const docaEmUso = await collection.findOne({
+      doca: Number(body.doca),
+      status: "em_uso"
+    });
+    
+    if (docaEmUso) {
+      return NextResponse.json(
+        { 
+          success: false,
+          error: `Doca ${body.doca} já está em uso por ${docaEmUso.motorista.nome}`
+        },
+        { status: 400 }
+      );
+    }
+    
+    // Preparar dados para inserção
+    const now = new Date();
+    const horaAtual = now.toLocaleTimeString('pt-BR', { 
+      hour12: false, 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+    
+    const novoCarregamento = {
+      doca: Number(body.doca),
+      cidadeDestino: body.cidadeDestino,
+      sequenciaCarro: body.sequenciaCarro || 0,
+      motorista: {
+        nome: typeof body.motorista === 'string' ? body.motorista : body.motorista.nome || "",
+        cpf: typeof body.motorista === 'string' ? "" : body.motorista.cpf || ""
+      },
+      tipoVeiculo: body.tipoVeiculo || "3/4",
+      placas: {
+        placaSimples: body.placas?.placaSimples || body.placaVeiculo || ""
+      },
+      horarios: {
+        encostouDoca: horaAtual,
+        inicioCarregamento: "",
+        fimCarregamento: "",
+        liberacao: ""
+      },
+      lacres: {
+        traseiro: body.lacres?.traseiro || "",
+        lateralEsquerdo: body.lacres?.lateralEsquerdo || "",
+        lateralDireito: body.lacres?.lateralDireito || ""
+      },
+      cargas: {
+        gaiolas: Number(body.cargas?.gaiolas || body.gaiolas || 0),
+        volumosos: Number(body.cargas?.volumosos || body.volumosos || 0),
+        mangaPallets: Number(body.cargas?.mangaPallets || body.mangaPallets || 0)
+      },
+      status: "em_uso",
+      createdAt: now,
+      updatedAt: now
+    };
+    
+    // Inserir no MongoDB
+    const result = await collection.insertOne(novoCarregamento);
+    
+    console.log('Carregamento criado no MongoDB:', result.insertedId);
+    
+    // Buscar o documento inserido para retornar com _id
+    const carregamentoInserido = await collection.findOne({ _id: result.insertedId });
+    
+    return NextResponse.json({
+      success: true,
+      message: 'Carregamento criado com sucesso',
+      data: carregamentoInserido
+    }, { 
+      status: 201,
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+  } catch (error) {
+    console.error('Erro ao criar carregamento:', error);
+    return NextResponse.json(
+      { 
+        success: false,
+        error: 'Erro ao processar a solicitação',
+        details: error instanceof Error ? error.message : String(error)
+      },
+      { 
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
         }
-      )
-    
-    if (result.matchedCount === 0) {
-      return NextResponse.json(
-        { error: 'Carregamento não encontrado' },
-        { status: 404 }
-      )
-    }
-    
-    return NextResponse.json({
-      message: 'Carregamento atualizado com sucesso',
-      modifiedCount: result.modifiedCount
-    })
-  } catch (error) {
-    console.error('Erro ao atualizar carregamento:', error)
-    return NextResponse.json(
-      { error: 'Erro ao atualizar carregamento' },
-      { status: 500 }
-    )
-  }
-}
-
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const client = await clientPromise
-    const db = client.db(process.env.MONGODB_DB || 'carregamentos_db')
-    
-    const result = await db
-      .collection<Carregamento>('carregamentos')
-      .deleteOne({ _id: new ObjectId(id) })
-    
-    if (result.deletedCount === 0) {
-      return NextResponse.json(
-        { error: 'Carregamento não encontrado' },
-        { status: 404 }
-      )
-    }
-    
-    return NextResponse.json({
-      message: 'Carregamento removido com sucesso',
-      deletedCount: result.deletedCount
-    })
-  } catch (error) {
-    console.error('Erro ao remover carregamento:', error)
-    return NextResponse.json(
-      { error: 'Erro ao remover carregamento' },
-      { status: 500 }
-    )
+      }
+    );
+  } finally {
+    if (client) await client.close();
   }
 }
