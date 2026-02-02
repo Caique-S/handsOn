@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Truck,
   Clock,
@@ -14,6 +14,9 @@ import {
   CheckCircle,
   TrendingUp,
   Loader2,
+  Upload,
+  Database,
+  RefreshCw,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -48,6 +51,24 @@ interface CarregamentoInput {
     mangaPallets: number;
   };
   observacoes?: string;
+}
+
+interface CSVRecord {
+  ID?: string;
+  "Nome do motorista principal"?: string;
+  "Tipo de Veiculo"?: string;
+  "Veiculo de tração"?: string;
+  "Veiculo de carga"?: string;
+  Destino?: string;
+  [key: string]: any; // Para outras colunas que possam existir
+}
+
+interface UploadData {
+  _id: string;
+  fileName: string;
+  uploadDate: string;
+  data: CSVRecord[];
+  totalRecords: number;
 }
 
 const calcularProgresso = (horarios: CarregamentoInput["horarios"]) => {
@@ -104,6 +125,13 @@ export default function NovoCarregamento() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
+  // Estados para os dados do CSV
+  const [uploads, setUploads] = useState<UploadData[]>([]);
+  const [selectedUploadId, setSelectedUploadId] = useState<string>("");
+  const [selectedRecordIndex, setSelectedRecordIndex] = useState<number>(-1);
+  const [loadingUploads, setLoadingUploads] = useState(false);
+  const [csvRecords, setCsvRecords] = useState<CSVRecord[]>([]);
+
   const [carregamento, setCarregamento] = useState<CarregamentoInput>({
     doca: 1,
     cidadeDestino: "",
@@ -150,6 +178,90 @@ export default function NovoCarregamento() {
     "Pombal - BA",
     "Bonfim - BA",
   ];
+
+  // Buscar uploads recentes do MongoDB
+  useEffect(() => {
+    fetchUploads();
+  }, []);
+
+  const fetchUploads = async () => {
+    try {
+      setLoadingUploads(true);
+      const response = await fetch('/api/upload?limit=10');
+      const data = await response.json();
+
+      if (data.success) {
+        setUploads(data.data);
+        if (data.data.length > 0) {
+          setSelectedUploadId(data.data[0]._id);
+          setCsvRecords(data.data[0].data);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao buscar uploads:', error);
+    } finally {
+      setLoadingUploads(false);
+    }
+  };
+
+  // Quando um upload é selecionado, carrega os registros
+  useEffect(() => {
+    if (selectedUploadId) {
+      const upload = uploads.find(u => u._id === selectedUploadId);
+      if (upload) {
+        setCsvRecords(upload.data);
+        setSelectedRecordIndex(-1); // Reseta a seleção de registro
+      }
+    }
+  }, [selectedUploadId, uploads]);
+
+  // Quando um registro do CSV é selecionado, preenche os campos
+  useEffect(() => {
+    if (selectedRecordIndex >= 0 && csvRecords[selectedRecordIndex]) {
+      const record = csvRecords[selectedRecordIndex];
+
+      // Preencher destino (cidade)
+      if (record.Destino) {
+        updateCarregamento("cidadeDestino", record.Destino);
+      }
+
+      // Preencher motorista
+      if (record["Nome do motorista principal"]) {
+        updateMotorista("nome", record["Nome do motorista principal"]);
+      }
+      if (record.ID) {
+        updateMotorista("cpf", record.ID);
+      }
+
+      // Mapear tipo de veículo do CSV para o formato do sistema
+      let tipoVeiculo: "3/4" | "TOCO" | "TRUCK" | "CARROCERIA" = "3/4";
+      if (record["Tipo de Veiculo"]) {
+        const tipo = record["Tipo de Veiculo"].toLowerCase();
+        if (tipo.includes("3/4") || tipo.includes("3/4")) {
+          tipoVeiculo = "3/4";
+        } else if (tipo.includes("truck")) {
+          tipoVeiculo = "TRUCK";
+        } else if (tipo.includes("toco")) {
+          tipoVeiculo = "TOCO";
+        } else if (tipo.includes("carreta") || tipo.includes("carroceria")) {
+          tipoVeiculo = "CARROCERIA";
+        }
+      }
+      updateCarregamento("tipoVeiculo", tipoVeiculo);
+
+      // Preencher placas
+      if (record["Veiculo de tração"]) {
+        if (tipoVeiculo === "CARROCERIA") {
+          updatePlacas("cavaloMecanico", record["Veiculo de tração"]);
+          if (record["Veiculo de carga"]) {
+            updatePlacas("bau", record["Veiculo de carga"]);
+          }
+        } else {
+          updatePlacas("placaSimples", record["Veiculo de tração"]);
+        }
+      }
+    }
+  }, [selectedRecordIndex, csvRecords]);
 
   const updateCarregamento = (field: keyof CarregamentoInput, value: any) => {
     setCarregamento((prev) => ({
@@ -240,20 +352,6 @@ export default function NovoCarregamento() {
     }
   };
 
-  const verificarCamposObrigatorios = () => {
-    const horarios = carregamento.horarios;
-    return (
-      horarios.encostouDoca &&
-      horarios.encostouDoca.trim() !== "" &&
-      horarios.inicioCarregamento &&
-      horarios.inicioCarregamento.trim() !== "" &&
-      horarios.fimCarregamento &&
-      horarios.fimCarregamento.trim() !== "" &&
-      horarios.liberacao &&
-      horarios.liberacao.trim() !== ""
-    );
-  };
-
   const prepararDadosParaAPI = () => {
     const dados = {
       doca: carregamento.doca,
@@ -291,7 +389,6 @@ export default function NovoCarregamento() {
       observacoes: carregamento.observacoes || "",
     };
 
-    // Remover campos vazios para carroceria
     if (carregamento.tipoVeiculo !== "CARROCERIA") {
       delete dados.placas.cavaloMecanico;
       delete dados.placas.bau;
@@ -365,6 +462,90 @@ export default function NovoCarregamento() {
         Novo Carregamento
       </h1>
 
+      {/* Seção de importação do CSV */}
+      <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+            <Database className="w-5 h-5" />
+            Importar dados do CSV
+          </h2>
+          <button
+            onClick={fetchUploads}
+            disabled={loadingUploads}
+            className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loadingUploads ? 'animate-spin' : ''}`} />
+            Atualizar
+          </button>
+        </div>
+
+        {loadingUploads ? (
+          <div className="text-center py-4">
+            <Loader2 className="w-6 h-6 animate-spin mx-auto text-blue-600" />
+            <p className="text-sm text-gray-600 mt-2">Carregando uploads...</p>
+          </div>
+        ) : uploads.length === 0 ? (
+          <div className="text-center py-4 border-2 border-dashed border-gray-300 rounded-lg">
+            <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+            <p className="text-gray-600">Nenhum arquivo CSV encontrado</p>
+            <p className="text-sm text-gray-500 mt-1">
+              Faça upload de um arquivo CSV para preencher automaticamente
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Selecione um arquivo CSV
+              </label>
+              <select
+                className="w-full p-3 border border-gray-300 rounded-lg"
+                value={selectedUploadId}
+                onChange={(e) => setSelectedUploadId(e.target.value)}
+              >
+                {uploads.map((upload) => (
+                  <option key={upload._id} value={upload._id}>
+                    {upload.fileName} - {new Date(upload.uploadDate).toLocaleDateString('pt-BR')} ({upload.totalRecords} registros)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {csvRecords.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Selecione um registro para preencher automaticamente
+                </label>
+                <select
+                  className="w-full p-3 border border-gray-300 rounded-lg"
+                  value={selectedRecordIndex}
+                  onChange={(e) => setSelectedRecordIndex(parseInt(e.target.value))}
+                >
+                  <option value="-1">Selecione um registro...</option>
+                  {csvRecords.map((record, index) => (
+                    <option key={index} value={index}>
+                      {record["Nome do motorista principal"] || `Registro ${index + 1}`} - {record.Destino || "Sem destino"} - {record["Tipo de Veiculo"] || "Sem tipo"}
+                    </option>
+                  ))}
+                </select>
+
+                {selectedRecordIndex >= 0 && csvRecords[selectedRecordIndex] && (
+                  <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-sm text-green-800">
+                      <strong>Registro selecionado:</strong> {csvRecords[selectedRecordIndex]["Nome do motorista principal"]} - {csvRecords[selectedRecordIndex].Destino}
+                    </p>
+                    <p className="text-xs text-green-600 mt-1">
+                      Os campos foram preenchidos automaticamente. Verifique e ajuste se necessário.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Formulário principal */}
       <div className="bg-white rounded-xl shadow-lg p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
@@ -474,7 +655,7 @@ export default function NovoCarregamento() {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Tipo de Veículo
           </label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {[
               { value: "3/4", label: "3/4", desc: "1 placa" },
               { value: "TRUCK", label: "Truck", desc: "1 placa" },
