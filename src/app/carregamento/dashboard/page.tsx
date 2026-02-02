@@ -199,7 +199,7 @@ export default function DashboardAnalise() {
         _id: doca._id,
         isEditing: true,
       };
-      
+
       // Salvar os dados no localStorage para a página de carregamento acessar
       localStorage.setItem('carregamentoEditavel', JSON.stringify(carregamentoData));
       router.push(`/carregamento/edit?id=${doca._id}&doca=${doca.id}`);
@@ -248,11 +248,11 @@ export default function DashboardAnalise() {
   // Estilo para card clicável
   const getCardStyle = (doca: DocaStatus) => {
     const baseStyle = `p-4 border rounded-lg transition-all duration-300 ${getBorderColor()} ${getBgColor()}`;
-    
+
     if (viewMode === "em_uso" && doca.status === "ocupada") {
       return `${baseStyle} cursor-pointer hover:shadow-md hover:scale-[1.02] active:scale-[0.99]`;
     }
-    
+
     return baseStyle;
   };
 
@@ -262,7 +262,7 @@ export default function DashboardAnalise() {
         {/* Cabeçalho */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-3">
+            <h1 className="text-2xl font-bold flex items-center gap-3">
               <BarChart3 className="text-blue-600" />
               Dashboard de Carregamentos
             </h1>
@@ -347,7 +347,7 @@ export default function DashboardAnalise() {
             </div>
           </div>
         </div>
-        
+
         {isLoading ? (
           <div className="flex justify-center items-center h-64">
             <div className="flex flex-col items-center gap-4">
